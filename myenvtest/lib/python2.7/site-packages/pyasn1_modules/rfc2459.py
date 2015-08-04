@@ -648,7 +648,7 @@ class CRLNumber(univ.Integer):
 
 class BaseCRLNumber(CRLNumber): pass
 
-id_kp_serverAuth = univ.ObjectIdentifier('1.3.6.1.5.5.7.3.1.1')
+id_kp_serverAuth = univ.ObjectIdentifier('1.3.6.1.5.5.7.3.1')
 id_kp_clientAuth = univ.ObjectIdentifier('1.3.6.1.5.5.7.3.2')
 id_kp_codeSigning = univ.ObjectIdentifier('1.3.6.1.5.5.7.3.3')
 id_kp_emailProtection = univ.ObjectIdentifier('1.3.6.1.5.5.7.3.4')
@@ -692,7 +692,7 @@ id_ce_basicConstraints = univ.ObjectIdentifier('2.5.29.19')
 
 class BasicConstraints(univ.Sequence):
     componentType = namedtype.NamedTypes(
-        namedtype.NamedType('cA', univ.Boolean(False)),
+        namedtype.DefaultedNamedType('cA', univ.Boolean(False)),
         namedtype.OptionalNamedType('pathLenConstraint', univ.Integer().subtype(subtypeSpec=constraint.ValueRangeConstraint(0, MAX)))
     )
 
@@ -761,7 +761,7 @@ class BaseDistance(univ.Integer):
 id_ce_cRLDistributionPoints = univ.ObjectIdentifier('2.5.29.31')
 
 class CRLDistPointsSyntax(univ.SequenceOf):
-    componentType = DistributionPoint
+    componentType = DistributionPoint()
     subtypeSpec = univ.SequenceOf.subtypeSpec + constraint.ValueSizeConstraint(1, MAX)
 id_ce_issuingDistributionPoint = univ.ObjectIdentifier('2.5.29.28')
 

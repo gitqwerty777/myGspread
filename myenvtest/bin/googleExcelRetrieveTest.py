@@ -8,6 +8,8 @@ from types import *
 import sys
 import zipfile
 import csv
+#import os
+#os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "~/gspread/gspread/myenvtest/bin/googleDocsRetrieveTest-9f78e34059f7.json"
 # http://gspread.readthedocs.org/en/latest/oauth2.html
 # http://stackoverflow.com/questions/20585218/install-python-package-without-root-access 
 # cannot fail-string
@@ -66,9 +68,11 @@ class LinkNotFoundError(Exception):
 linkFactory = LinkFactory()
     
 class QuestionDownloader:
-    def __init__(self, jsonKeyFile, questionURL):
+    def __init__(self, jsonKeyFile, questionURL, linkPrefix):
         gc = self.openjsonKey(jsonKeyFile)
         spreadSheet = gc.open_by_url(questionURL)
+        #spreadSheet = gc.open("¿ï¾ÜÃDÃD®w")
+        self.linkPrefix = linkPrefix
         self.workSheets = spreadSheet.worksheets()
         
     def openjsonKey(self, jsonKeyFile):
@@ -78,16 +82,30 @@ class QuestionDownloader:
         gc = gspread.authorize(credentials)
         return gc
 
+    def SaveJSONLink(self):
+        self.SaveAllSheetsinJSON()
+        jsonlinkf = open("JsonLink.json", "w")
+        filenamelist = []
+        for i in range(len(self.workSheets)):
+            filenamelist.append(self.linkPrefix + "Question%d.json" % i)
+        data = json.dumps(filenamelist, separators=(',',':'))
+        print data
+        jsonlinkf.write(data)
+        jsonlinkf.close()
+        #jsonlinkf = open("Jsonlink.json", "r")
+        #for jsonlinkf.readline():
+         #   print 
+                    
     def SaveAllSheetsinJSON(self):
-        for i in range(len(self.worksheets)):
+        for i in range(len(self.workSheets)):
             self.SaveSheetinJSON(i)
-
+        
     def transFormType(self, r):
         for i, element in enumerate(r):
             typei = self.titleList.index(element)
             if type(r[element]) != self.typeList[typei]:
                 r[element] = self.typeList[typei](r[element])
-        print r
+        #print r
         return r
                         
     def SaveSheetinJSON(self, sheetIndex): # Transform CSV to json
@@ -127,11 +145,13 @@ class QuestionDownloader:
                 typeList.append(IntType)
             elif elementType == "string":
                 typeList.append(StringType)
+            elif elementType == "bool":
+                typeList.append(BooleanType)
             elif elementType == "float":
                 typeList.append(FloatType)
             elif elementType == "link":
                 typeList.append(InstanceType)
-        print "typelist = ", str(typeList)
+        #print "typelist = ", str(typeList)
         return typeList
 
     def checkTypeError(self, row):
@@ -172,12 +192,11 @@ if __name__ == "__main__":
     logger = getLog()
     #qd = QuestionDownloader('googleDocsRetrieveTest-9f78e34059f7.json', "https://docs.google.com/spreadsheets/d/13Y8EbTCLtuBJYQyQ_eXwveac3diD4ToGXpUsMfVSgHw/edit?usp=sharing")
 
-    qd = QuestionDownloader('googleDocsRetrieveTest-9f78e34059f7.json', "https://docs.google.com/spreadsheets/d/1SAZkS9QY8gF3kNd6UWvNxHrxIYXX6cnbK5-Q_oxqyyk/edit?usp=sharing")
-
-    #qd.SaveAllSheetsinJSON()
-    qd.SaveSheetinJSON(0)
-    z = zipfile.ZipFile('Questions.zip','w',zipfile.ZIP_DEFLATED)
-    z.write('Question0.json')
-    z.close()
+    qd = QuestionDownloader('googleDocsRetrieveTest-c415d4b20164.json', "https://docs.google.com/spreadsheets/d/1SAZkS9QY8gF3kNd6UWvNxHrxIYXX6cnbK5-Q_oxqyyk/edit?usp=sharing", "http://140.112.30.38:8000/")
+    qd.SaveJSONLink()
+    #qd.SaveSheetinJSON(0)
+    #z = zipfile.ZipFile('Questions.zip','w',zipfile.ZIP_DEFLATED)
+    #z.write('Question0.json')
+    #z.close()
     
 
