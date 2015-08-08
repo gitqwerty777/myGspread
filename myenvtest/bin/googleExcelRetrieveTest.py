@@ -1,4 +1,3 @@
-# encoding: utf-8
 import gspread
 import json
 import urllib
@@ -8,8 +7,7 @@ from types import *
 import sys
 import zipfile
 import csv
-#import os
-#os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "~/gspread/gspread/myenvtest/bin/googleDocsRetrieveTest-9f78e34059f7.json"
+import codecs
 # http://gspread.readthedocs.org/en/latest/oauth2.html
 # http://stackoverflow.com/questions/20585218/install-python-package-without-root-access 
 # cannot fail-string
@@ -71,7 +69,6 @@ class QuestionDownloader:
     def __init__(self, jsonKeyFile, questionURL, linkPrefix):
         gc = self.openjsonKey(jsonKeyFile)
         spreadSheet = gc.open_by_url(questionURL)
-        #spreadSheet = gc.open("¿ï¾ÜÃDÃD®w")
         self.linkPrefix = linkPrefix
         self.workSheets = spreadSheet.worksheets()
         
@@ -83,11 +80,12 @@ class QuestionDownloader:
         return gc
 
     def SaveJSONLink(self):
-        self.SaveAllSheetsinJSON()
+        self.SaveSheetinJSON(0)
+        #self.SaveAllSheetsinJSON()
         jsonlinkf = open("JsonLink.json", "w")
         filenamelist = []
         for i in range(len(self.workSheets)):
-            filenamelist.append(self.linkPrefix + "Question%d.json" % i)
+            filenamelist.append(self.linkPrefix + self.workSheets[i].title + ".json")
         data = json.dumps(filenamelist, separators=(',',':'))
         print data
         jsonlinkf.write(data)
@@ -99,30 +97,34 @@ class QuestionDownloader:
     def SaveAllSheetsinJSON(self):
         for i in range(len(self.workSheets)):
             self.SaveSheetinJSON(i)
-        
-    def transFormType(self, r):
+       
+    def transFormType(self, r):        
         for i, element in enumerate(r):
             typei = self.titleList.index(element)
+            print "type of %s is %s" % (r[element], type(r[element]))            
             if type(r[element]) != self.typeList[typei]:
                 r[element] = self.typeList[typei](r[element])
-        #print r
+            print "type of %s is %s" % (r[element], type(r[element]))           
         return r
                         
     def SaveSheetinJSON(self, sheetIndex): # Transform CSV to json
         self.LoadWorkSheet(sheetIndex)
         self.SaveSheetinCSV()
-        f = open("Questions.csv", 'r')
+        f = codecs.open("Questions.csv", 'r', encoding='utf-8')
         csv_reader = csv.DictReader(f,self.titleList)
-        jsonf = open("Question%d.json" % sheetIndex,'w')
-        data = json.dumps([self.transFormType(r) for r in csv_reader], indent=4, separators=(',', ': '))
+        jsonf = codecs.open("Question%d.json" % sheetIndex,'w', encoding='utf-8')
+        data = json.dumps([self.transFormType(r) for r in csv_reader], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
         jsonf.write(data)
         f.close()
-        jsonf.close()        
+        jsonf.close()
         
     def SaveSheetinCSV(self):
-        f = open("Questions.csv", "wb")
+        f = codecs.open("Questions.csv", "w", encoding='utf-8')
         writer = csv.writer(f)
-        writer.writerows(self.valueList)
+        for row in self.valueList:
+            for elements in row:
+                elements = elements.encode('unicode-escape')                
+        writer.writerows(self.valueList)    
         f.close()
 
     def LoadWorkSheet(self, sheetIndex):
@@ -137,6 +139,8 @@ class QuestionDownloader:
 
         self.typeList = self.LoadType(strtypeList)
         self.valueList = [row for row in totalList if self.checkTypeError(row)]
+        print type(self.valueList[0][1])
+        print self.valueList[0][1]
 
     def LoadType(self, strtypeList):
         typeList = []
@@ -144,11 +148,13 @@ class QuestionDownloader:
             if elementType == "int":
                 typeList.append(IntType)
             elif elementType == "string":
-                typeList.append(StringType)
+                typeList.append(UnicodeType)
             elif elementType == "bool":
                 typeList.append(BooleanType)
             elif elementType == "float":
                 typeList.append(FloatType)
+            elif elementType == "array":
+                typeList.append(ListType)
             elif elementType == "link":
                 typeList.append(InstanceType)
         #print "typelist = ", str(typeList)
@@ -171,7 +177,7 @@ class QuestionDownloader:
                 return False
             except Exception, e:
                 logger.error(str(e))
-                logger.error("%s error: type of %s(type = %s) not equal to %s" % (str(row), str(element), type(element), self.typeList[i]))
+                logger.error("%s error: type of %s(type = %s) not equal to %s" % (str(row), str(element.encode('utf-8')), type(element.encode('utf-8')), self.typeList[i]))
                 return False
                 
         return True
