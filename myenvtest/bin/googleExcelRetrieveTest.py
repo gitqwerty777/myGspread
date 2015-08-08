@@ -67,12 +67,13 @@ linkFactory = LinkFactory()
     
 class QuestionDownloader:
     def __init__(self, jsonKeyFile, questionURL, linkPrefix):
-        gc = self.openjsonKey(jsonKeyFile)
+        gc = self.Authorize(jsonKeyFile)
         spreadSheet = gc.open_by_url(questionURL)
         self.linkPrefix = linkPrefix
-        self.workSheets = spreadSheet.worksheets()
+        self.workSheets = spreadSheet.worksheets()        
+        self.workSheetName = [w.title for w in self.workSheets]
         
-    def openjsonKey(self, jsonKeyFile):
+    def Authorize(self, jsonKeyFile):
         json_key = json.load(open(jsonKeyFile))
         scope = ['https://spreadsheets.google.com/feeds']
         credentials = SignedJwtAssertionCredentials(json_key['client_email'], json_key['private_key'], scope)
@@ -80,19 +81,15 @@ class QuestionDownloader:
         return gc
 
     def SaveJSONLink(self):
-        self.SaveSheetinJSON(0)
-        #self.SaveAllSheetsinJSON()
+        #self.SaveSheetinJSON(0)
+        self.SaveAllSheetsinJSON()
         jsonlinkf = open("JsonLink.json", "w")
         filenamelist = []
         for i in range(len(self.workSheets)):
-            filenamelist.append(self.linkPrefix + self.workSheets[i].title + ".json")
+            filenamelist.append(self.linkPrefix + self.workSheetName[i] + ".json")
         data = json.dumps(filenamelist, separators=(',',':'))
-        print data
         jsonlinkf.write(data)
         jsonlinkf.close()
-        #jsonlinkf = open("Jsonlink.json", "r")
-        #for jsonlinkf.readline():
-         #   print 
                     
     def SaveAllSheetsinJSON(self):
         for i in range(len(self.workSheets)):
@@ -101,10 +98,12 @@ class QuestionDownloader:
     def transFormType(self, r):        
         for i, element in enumerate(r):
             typei = self.titleList.index(element)
-            print "type of %s is %s" % (r[element], type(r[element]))            
-            if type(r[element]) != self.typeList[typei]:
+            #print "type of %s is %s" % (r[element], type(r[element]))
+            if r[element] == "":
+              pass  
+            elif type(r[element]) != self.typeList[typei]:
                 r[element] = self.typeList[typei](r[element])
-            print "type of %s is %s" % (r[element], type(r[element]))           
+            #print "type of %s is %s" % (r[element], type(r[element]))           
         return r
                         
     def SaveSheetinJSON(self, sheetIndex): # Transform CSV to json
@@ -112,7 +111,7 @@ class QuestionDownloader:
         self.SaveSheetinCSV()
         f = codecs.open("Questions.csv", 'r', encoding='utf-8')
         csv_reader = csv.DictReader(f,self.titleList)
-        jsonf = codecs.open("Question%d.json" % sheetIndex,'w', encoding='utf-8')
+        jsonf = codecs.open(self.workSheetName[sheetIndex] + ".json",'w', encoding='utf-8')
         data = json.dumps([self.transFormType(r) for r in csv_reader], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
         jsonf.write(data)
         f.close()
@@ -139,8 +138,6 @@ class QuestionDownloader:
 
         self.typeList = self.LoadType(strtypeList)
         self.valueList = [row for row in totalList if self.checkTypeError(row)]
-        print type(self.valueList[0][1])
-        print self.valueList[0][1]
 
     def LoadType(self, strtypeList):
         typeList = []
@@ -163,7 +160,9 @@ class QuestionDownloader:
     def checkTypeError(self, row):
         for i, element in enumerate(row):
             try:
-                if(self.typeList[i] == InstanceType):
+                if element == "": # TODO:allow empty because of array type
+                    pass
+                elif(self.typeList[i] == InstanceType):
                     mylink = linkFactory.createLink(element)
                     if not mylink.isLink():
                         raise LinkNotFoundError("link not found", 111)
