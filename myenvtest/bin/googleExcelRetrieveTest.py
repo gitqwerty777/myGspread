@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections import OrderedDict
 import gspread
 import json
 import urllib
@@ -17,11 +18,11 @@ import copy
 #https://docs.google.com/spreadsheets/d/13Y8EbTCLtuBJYQyQ_eXwveac3diD4ToGXpUsMfVSgHw/edit#gid=0
 
 
-def pretty(d, indent=0):
+def prettyPrint(d, indent=0):
     for key, value in d.iteritems():
         print '\t' * indent + str(key)
         if isinstance(value, dict):
-            pretty(value, indent+1)
+            prettyPrint(value, indent+1)
         else:
             print '\t' * (indent+1) + str(value)                                    
 
@@ -184,22 +185,29 @@ class QuestionDownloader:
 
         self.valueList = newValueList
         print "merged value list::", self.valueList'''
+                    
+        def reverseOrder(row):
+            item = row.items()
+            item.reverse()
+            return OrderedDict(item)
+        
      # reconstruct typelist and titlelist
         self.colnum = len(self.typeList)
         typeStack = []
         titleStack = []
-        valueStacks = [dict() for i in range(self.colnum)]
+        valueStacks = [OrderedDict() for i in range(len(self.valueList))]
         for i, t in enumerate(reversed(self.typeList)):
-            if t == ListType: # append later type
-                # add upper level list
+            if t == ListType: # add upper level list
                 typeStack = [typeStack[:]]
                 titleStack = [titleStack[:]]
-                valueStacks = [{self.titleList[self.colnum-1-i]: valuestack} for valuestack in valueStacks]
+                valueStacks = [OrderedDict({self.titleList[self.colnum-1-i]: reverseOrder(valuestack)}) for valuestack in valueStacks]
             else:
                 typeStack.insert(0, t) # push
                 titleStack.insert(0, self.titleList[self.colnum-1-i])                
                 for j, valueStack in enumerate(valueStacks):
                     valueStack[self.titleList[self.colnum-1-i]] = self.valueList[j][self.colnum-1-i]
+
+        valueStacks = [reverseOrder(row) for row in valueStacks]            
         '''
         print "typestack = ", typeStack
         print "titleStack = ", titleStack
@@ -209,7 +217,6 @@ class QuestionDownloader:
         self.titleStack = titleStack
 
         # merge item into array
-        # now only use first row to test
         firstColumnKey = self.titleList[0]
         prerow = []
         mergeStack = []
@@ -220,7 +227,7 @@ class QuestionDownloader:
             print "firstElementKey = " , firstElementKey
             if not firstElementKey: # not row, merge it to previous one                
                 print "prerow"
-                pretty(prerow)
+                prettyPrint(prerow)
                 newrow = prerow
                 mergedrow = row
                 for k in previousKeyPostion[:-1]:
@@ -237,16 +244,17 @@ class QuestionDownloader:
                 mergeRow.append(mergedrow)
                 print "after merge: ", mergeRow
                 print "prerow"
-                pretty(prerow)
+                prettyPrint(prerow)
                 mergepos = prerow
                 for k in previousKeyPostion[:-2]:
                     mergepos = mergepos[k]
                 print "mergepos", mergepos
                 mergepos[previousKeyPostion[-2]] = mergeRow
                 print "newrow"
-                pretty(prerow)
+                prettyPrint(prerow)
             else:
-                mergeStack.append(prerow)
+                if prerow != []:
+                    mergeStack.append(prerow)
                 prerow = row
         if prerow != mergeStack[-1]:
             mergeStack.append(prerow)
@@ -260,7 +268,6 @@ class QuestionDownloader:
         count = 0
         for k, v in row.iteritems():
             if isinstance(v, dict):                
-                print "isDICT!!!!"
                 p, f = self.checkRowType(row[k])
                 print "return ", p, f
                 if p != []:
