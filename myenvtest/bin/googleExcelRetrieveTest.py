@@ -1,22 +1,17 @@
-from collections import defaultdict
-from collections import OrderedDict
-import gspread
-import json
+import gspread, json
 import urllib
-import logging
 from oauth2client.client import SignedJwtAssertionCredentials
+import sys, copy, logging, codecs, csv
 from types import *
-import sys
-import zipfile
-import csv
-import codecs
-import copy
+from collections import defaultdict, OrderedDict
+
 # http://gspread.readthedocs.org/en/latest/oauth2.html
 # http://stackoverflow.com/questions/20585218/install-python-package-without-root-access 
-# cannot fail-string
-# TODO: exe file in windows, downloadFIle and rename
-#https://docs.google.com/spreadsheets/d/13Y8EbTCLtuBJYQyQ_eXwveac3diD4ToGXpUsMfVSgHw/edit#gid=0
 
+def reverseOrder(row):
+    item = row.items()
+    item.reverse()
+    return OrderedDict(item)
 
 def prettyPrint(d, indent=0):
     for key, value in d.iteritems():
@@ -99,6 +94,7 @@ class QuestionDownloader:
         filenamelist = []
         for i in range(len(self.workSheets)):
             filenamelist.append(self.linkPrefix + self.workSheetName[i] + ".json")
+        print filenamelist # DON'T DELETE, will be used in php
         data = json.dumps(filenamelist, separators=(',',':'))
         jsonlinkf.write(data)
         jsonlinkf.close()
@@ -120,17 +116,12 @@ class QuestionDownloader:
                         
     def SaveSheetinJSON(self, sheetIndex): # Transform CSV to json
         self.LoadWorkSheet(sheetIndex)
-        #self.SaveSheetinCSV()
-        #f = codecs.open("Questions.csv", 'r', encoding='utf-8')
-        #csv_reader = csv.DictReader(f,self.titleList)
         jsonf = codecs.open(self.workSheetName[sheetIndex] + ".json",'w', encoding='utf-8')
-        #data = json.dumps([self.transFormType(csv_reader)], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
         data = json.dumps(self.valueStacks, indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
         jsonf.write(data)
-        #f.close()
         jsonf.close()
         
-    def SaveSheetinCSV(self):
+    def SaveSheetinCSV(self): # unused
         f = codecs.open("Questions.csv", "w", encoding='utf-8')
         writer = csv.writer(f)
         for row in self.valueList:
@@ -159,39 +150,13 @@ class QuestionDownloader:
 
         self.typeList = self.LoadType(strtypeList)
         self.valueList = [self.transFormListType(row) for row in totalList if self.checkTypeError(row)]
-
-        '''
-    # should add original value into array before this
-        self.colnum = len(self.typeList)
-        newValueList = []
-        for i in range(len(self.valueList)):
-            nowRow = self.valueList[i]
-            for j in range(self.colnum):
-                if nowRow[j] != "": # part of array
-                    if j == 0:
-                        newValueList.append(nowRow)
-                        self.updateArray(nowRow)
-                        #print nowRow
-                        break
-                    else:
-                        print "original list\n", newValueList[-1]
-                        originalValue = newValueList[-1][j-2] 
-                        print "original value\n", originalValue                        
-                        newList = [originalValue, nowRow[j:]]
-                        print "updated value\n", newList
-                        newValueList[-1][j-2] = newList
-                        print "updated list\n", newValueList[-1]
-                        break
-
-        self.valueList = newValueList
-        print "merged value list::", self.valueList'''
-                    
-        def reverseOrder(row):
-            item = row.items()
-            item.reverse()
-            return OrderedDict(item)
         
-     # reconstruct typelist and titlelist
+        # reconstruct typelist, titlelist and valueList
+        self.reconstruct()        
+        # merge some rows into array
+        self.mergeRows()
+        
+    def reconstruct(self):
         self.colnum = len(self.typeList)
         typeStack = []
         titleStack = []
@@ -207,82 +172,74 @@ class QuestionDownloader:
                 for j, valueStack in enumerate(valueStacks):
                     valueStack[self.titleList[self.colnum-1-i]] = self.valueList[j][self.colnum-1-i]
 
-        valueStacks = [reverseOrder(row) for row in valueStacks]            
+        valueStacks = [reverseOrder(row) for row in valueStacks]
+        
+        self.valueStacks = valueStacks
+        self.titleStack = titleStack
+        self.typeStack = typeStack
         '''
         print "typestack = ", typeStack
         print "titleStack = ", titleStack
-        print "valueStack = ", valueStacks'''
         print "valueStack = ", valueStacks
-        self.valueStacks = valueStacks
-        self.titleStack = titleStack
+        '''        
 
-        # merge item into array
+    def mergeRows(self):
         firstColumnKey = self.titleList[0]
         prerow = []
         mergeStack = []
         for i, row in enumerate(self.valueStacks):
-            previousKeyPostion, firstElementKey = self.checkRowType(row)
-            print "row = ", row
-            print "previousKeyPostion = ", previousKeyPostion
-            print "firstElementKey = " , firstElementKey
-            if not firstElementKey: # not row, merge it to previous one                
-                print "prerow"
-                prettyPrint(prerow)
-                newrow = prerow
+            FirstValuePosition, isFirstElement = self.checkRowType(row)
+            if not isFirstElement: # not row, merge it to previous one                
+                #print "prerow"; prettyPrint(prerow)
+
+                prerowPart = prerow
                 mergedrow = row
-                for k in previousKeyPostion[:-1]:
-                    newrow = newrow[k]
+                for k in FirstValuePosition[:-1]:
+                    prerowPart = prerowPart[k]
                     mergedrow = mergedrow[k]
-                print "%s append %s" % (str(newrow), str(mergedrow))
-                mergepos = newrow
+                #print "%s append %s" % (str(prerowPart), str(mergedrow))                
+                
                 mergeRow = []
-                if isinstance(newrow, list):
-                    for r in newrow:
-                        mergeRow.append(r)
+                if isinstance(prerowPart, list):
+                    mergeRow = copy.deepcopy(prerowPart)                
                 else:
-                    mergeRow.append(newrow)
+                    mergeRow.append(prerowPart)
                 mergeRow.append(mergedrow)
-                print "after merge: ", mergeRow
-                print "prerow"
-                prettyPrint(prerow)
+
                 mergepos = prerow
-                for k in previousKeyPostion[:-2]:
-                    mergepos = mergepos[k]
-                print "mergepos", mergepos
-                mergepos[previousKeyPostion[-2]] = mergeRow
-                print "newrow"
-                prettyPrint(prerow)
+                for k in FirstValuePosition[:-2]:
+                    mergepos = mergepos[k]        
+                mergepos[FirstValuePosition[-2]] = mergeRow # update the value at where upper level of first value is
             else:
                 if prerow != []:
                     mergeStack.append(prerow)
                 prerow = row
-        if prerow != mergeStack[-1]:
+        if prerow != mergeStack[-1]: # the last row(doesn't append yet)
             mergeStack.append(prerow)
-        print "mergeStack", mergeStack
+        #print "mergeStack", mergeStack
         self.valueStacks = mergeStack
         
-    def checkRowType(self, row):
-        print "checkrowtype: ", row
-        firstElementKey = True
-        previousKeyPostion = []
+    def checkRowType(self, row):       
+        isFirstElement = True
+        FirstValuePosition = []
         count = 0
         for k, v in row.iteritems():
             if isinstance(v, dict):                
                 p, f = self.checkRowType(row[k])
-                print "return ", p, f
+                #print "return ", p, f
                 if p != []:
-                    previousKeyPostion.append(k)
+                    FirstValuePosition.append(k)
                     for pre in p:
-                        previousKeyPostion.append(pre)
-                    firstElementKey = (count==0) and f
-                    break                
+                        FirstValuePosition.append(pre)
+                    isFirstElement = (count==0) and f
+                    break
             else:
                 if row[k] != "":
-                    previousKeyPostion.append(k)
-                    firstElementKey = (count==0)
+                    FirstValuePosition.append(k)
+                    isFirstElement = (count==0)
                     break
             count += 1
-        return previousKeyPostion, firstElementKey
+        return FirstValuePosition, isFirstElement
         
     def LoadType(self, strtypeList):
         typeList = []
@@ -299,7 +256,6 @@ class QuestionDownloader:
                 typeList.append(ListType)
             elif elementType == "link":
                 typeList.append(InstanceType)
-        #print "typelist = ", str(typeList)
         return typeList
 
     def checkTypeError(self, row):
@@ -313,7 +269,7 @@ class QuestionDownloader:
                         raise LinkNotFoundError("link not found", 111)
                     else:
                         newfilename = mylink.downloadFile()
-                        row[i] = newfilename # ???
+                        row[i] = newfilename
                 else:
                     element = self.typeList[i](element)
             except LinkNotFoundError:
@@ -325,7 +281,6 @@ class QuestionDownloader:
                 return False
                 
         return True
-
 
 def getLog():
     logging.basicConfig(filename='questionGetter.log',
@@ -341,12 +296,7 @@ if __name__ == "__main__":
     
     logger = getLog()
     #qd = QuestionDownloader('googleDocsRetrieveTest-9f78e34059f7.json', "https://docs.google.com/spreadsheets/d/13Y8EbTCLtuBJYQyQ_eXwveac3diD4ToGXpUsMfVSgHw/edit?usp=sharing")
-
     qd = QuestionDownloader('googleDocsRetrieveTest-c415d4b20164.json', "https://docs.google.com/spreadsheets/d/1SAZkS9QY8gF3kNd6UWvNxHrxIYXX6cnbK5-Q_oxqyyk/edit?usp=sharing", "http://140.112.30.38:8000/")
     qd.SaveJSONLink()
-    #qd.SaveSheetinJSON(0)
-    #z = zipfile.ZipFile('Questions.zip','w',zipfile.ZIP_DEFLATED)
-    #z.write('Question0.json')
-    #z.close()
-    
+    #qd.SaveSheetinJSON(0)    
 
