@@ -1,3 +1,4 @@
+from collections import defaultdict
 import gspread
 import json
 import urllib
@@ -14,6 +15,15 @@ import copy
 # cannot fail-string
 # TODO: exe file in windows, downloadFIle and rename
 #https://docs.google.com/spreadsheets/d/13Y8EbTCLtuBJYQyQ_eXwveac3diD4ToGXpUsMfVSgHw/edit#gid=0
+
+
+def pretty(d, indent=0):
+    for key, value in d.iteritems():
+        print '\t' * indent + str(key)
+        if isinstance(value, dict):
+            pretty(value, indent+1)
+        else:
+            print '\t' * (indent+1) + str(value)                                    
 
 class LinkFactory:
     def createLink(self, s):
@@ -139,7 +149,7 @@ class QuestionDownloader:
     def LoadWorkSheet(self, sheetIndex):
         self.workSheet = self.workSheets[sheetIndex]
         totalList = self.workSheet.get_all_values()
-
+        
         totalList.pop(0) # first row is chinese
         self.titleList = totalList[0][:]
         strtypeList = totalList[1][:]
@@ -149,8 +159,8 @@ class QuestionDownloader:
         self.typeList = self.LoadType(strtypeList)
         self.valueList = [self.transFormListType(row) for row in totalList if self.checkTypeError(row)]
 
-
-        # should add original value into array before this
+        '''
+    # should add original value into array before this
         self.colnum = len(self.typeList)
         newValueList = []
         for i in range(len(self.valueList)):
@@ -173,9 +183,9 @@ class QuestionDownloader:
                         break
 
         self.valueList = newValueList
-        print self.valueList
-                
-        # reconstruct typelist and titlelist
+        print "merged value list::", self.valueList'''
+     # reconstruct typelist and titlelist
+        self.colnum = len(self.typeList)
         typeStack = []
         titleStack = []
         valueStacks = [dict() for i in range(self.colnum)]
@@ -194,14 +204,79 @@ class QuestionDownloader:
         print "typestack = ", typeStack
         print "titleStack = ", titleStack
         print "valueStack = ", valueStacks'''
+        print "valueStack = ", valueStacks
         self.valueStacks = valueStacks
-                    
-                    
-    def updateArray(self, row):
-        for i in range(len(row), 0, -1):
-            pass
+        self.titleStack = titleStack
+
+        # merge item into array
+        # now only use first row to test
+        firstColumnKey = self.titleList[0]
+        prerow = []
+        mergeStack = []
+        for i, row in enumerate(self.valueStacks):
+            previousKeyPostion, firstElementKey = self.checkRowType(row)
+            print "row = ", row
+            print "previousKeyPostion = ", previousKeyPostion
+            print "firstElementKey = " , firstElementKey
+            if not firstElementKey: # not row, merge it to previous one                
+                print "prerow"
+                pretty(prerow)
+                newrow = prerow
+                mergedrow = row
+                for k in previousKeyPostion[:-1]:
+                    newrow = newrow[k]
+                    mergedrow = mergedrow[k]
+                print "%s append %s" % (str(newrow), str(mergedrow))
+                mergepos = newrow
+                mergeRow = []
+                if isinstance(newrow, list):
+                    for r in newrow:
+                        mergeRow.append(r)
+                else:
+                    mergeRow.append(newrow)
+                mergeRow.append(mergedrow)
+                print "after merge: ", mergeRow
+                print "prerow"
+                pretty(prerow)
+                mergepos = prerow
+                for k in previousKeyPostion[:-2]:
+                    mergepos = mergepos[k]
+                print "mergepos", mergepos
+                mergepos[previousKeyPostion[-2]] = mergeRow
+                print "newrow"
+                pretty(prerow)
+            else:
+                mergeStack.append(prerow)
+                prerow = row
+        if prerow != mergeStack[-1]:
+            mergeStack.append(prerow)
+        print "mergeStack", mergeStack
+        self.valueStacks = mergeStack
         
-                    
+    def checkRowType(self, row):
+        print "checkrowtype: ", row
+        firstElementKey = True
+        previousKeyPostion = []
+        count = 0
+        for k, v in row.iteritems():
+            if isinstance(v, dict):                
+                print "isDICT!!!!"
+                p, f = self.checkRowType(row[k])
+                print "return ", p, f
+                if p != []:
+                    previousKeyPostion.append(k)
+                    for pre in p:
+                        previousKeyPostion.append(pre)
+                    firstElementKey = (count==0) and f
+                    break                
+            else:
+                if row[k] != "":
+                    previousKeyPostion.append(k)
+                    firstElementKey = (count==0)
+                    break
+            count += 1
+        return previousKeyPostion, firstElementKey
+        
     def LoadType(self, strtypeList):
         typeList = []
         for elementType in strtypeList:
