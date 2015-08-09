@@ -109,13 +109,14 @@ class QuestionDownloader:
                         
     def SaveSheetinJSON(self, sheetIndex): # Transform CSV to json
         self.LoadWorkSheet(sheetIndex)
-        self.SaveSheetinCSV()
-        f = codecs.open("Questions.csv", 'r', encoding='utf-8')
-        csv_reader = csv.DictReader(f,self.titleList)
+        #self.SaveSheetinCSV()
+        #f = codecs.open("Questions.csv", 'r', encoding='utf-8')
+        #csv_reader = csv.DictReader(f,self.titleList)
         jsonf = codecs.open(self.workSheetName[sheetIndex] + ".json",'w', encoding='utf-8')
-        data = json.dumps([self.transFormType(csv_reader)], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
+        #data = json.dumps([self.transFormType(csv_reader)], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
+        data = json.dumps(self.valueStacks, indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
         jsonf.write(data)
-        f.close()
+        #f.close()
         jsonf.close()
         
     def SaveSheetinCSV(self):
@@ -127,6 +128,14 @@ class QuestionDownloader:
         writer.writerows(self.valueList)    
         f.close()
 
+    def transFormListType(self, row):
+        for i, element in enumerate(row):            
+            if element == "":
+                pass
+            elif type(element) != self.typeList[i]:
+                row[i] = self.typeList[i](element)
+        return row        
+        
     def LoadWorkSheet(self, sheetIndex):
         self.workSheet = self.workSheets[sheetIndex]
         totalList = self.workSheet.get_all_values()
@@ -138,34 +147,11 @@ class QuestionDownloader:
         totalList.pop(0) # remove type
 
         self.typeList = self.LoadType(strtypeList)
-        self.valueList = [row for row in totalList if self.checkTypeError(row)]
- 
-        # reconstruct typelist and titlelist
-        self.colnum = len(self.typeList)
-        typeStack = []
-        titleStack = []
-        valueStacks = [[] for i in range(self.colnum)]
-        for i, t in enumerate(reversed(self.typeList)):
-            if t == ListType: # append later type
-                # add upper level list
-                typeStack = [typeStack[:]]
-                titleStack = [titleStack[:]]
-                valueStacks = [[valuestack[:]] for valuestack in valueStacks]
-            else:
-                typeStack.insert(0, t) # push
-                titleStack.insert(0, self.titleList[self.colnum-1-i])                
-                for j, valueStack in enumerate(valueStacks):
-                    valueStack.insert(0, self.valueList[j][self.colnum-1-i])
-        print "typestack = ", typeStack
-        print "titleStack = ", titleStack
-        print "valueStack = ", valueStacks 
+        self.valueList = [self.transFormListType(row) for row in totalList if self.checkTypeError(row)]
 
-        for row in valueStacks:
-            #tmprow = dict(zip(titleStack, row))
-            print "tmprow", tmprow
-                
-        
-        # should add original value into array before this            
+
+        # should add original value into array before this
+        self.colnum = len(self.typeList)
         newValueList = []
         for i in range(len(self.valueList)):
             nowRow = self.valueList[i]
@@ -186,7 +172,29 @@ class QuestionDownloader:
                         print "updated list\n", newValueList[-1]
                         break
 
-        print newValueList
+        self.valueList = newValueList
+        print self.valueList
+                
+        # reconstruct typelist and titlelist
+        typeStack = []
+        titleStack = []
+        valueStacks = [dict() for i in range(self.colnum)]
+        for i, t in enumerate(reversed(self.typeList)):
+            if t == ListType: # append later type
+                # add upper level list
+                typeStack = [typeStack[:]]
+                titleStack = [titleStack[:]]
+                valueStacks = [{self.titleList[self.colnum-1-i]: valuestack} for valuestack in valueStacks]
+            else:
+                typeStack.insert(0, t) # push
+                titleStack.insert(0, self.titleList[self.colnum-1-i])                
+                for j, valueStack in enumerate(valueStacks):
+                    valueStack[self.titleList[self.colnum-1-i]] = self.valueList[j][self.colnum-1-i]
+        '''
+        print "typestack = ", typeStack
+        print "titleStack = ", titleStack
+        print "valueStack = ", valueStacks'''
+        self.valueStacks = valueStacks
                     
                     
     def updateArray(self, row):
