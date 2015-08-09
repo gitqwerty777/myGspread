@@ -8,6 +8,7 @@ import sys
 import zipfile
 import csv
 import codecs
+import copy
 # http://gspread.readthedocs.org/en/latest/oauth2.html
 # http://stackoverflow.com/questions/20585218/install-python-package-without-root-access 
 # cannot fail-string
@@ -95,16 +96,16 @@ class QuestionDownloader:
         for i in range(len(self.workSheets)):
             self.SaveSheetinJSON(i)
        
-    def transFormType(self, r):        
-        for i, element in enumerate(r):
-            typei = self.titleList.index(element)
-            #print "type of %s is %s" % (r[element], type(r[element]))
-            if r[element] == "":
-              pass  
-            elif type(r[element]) != self.typeList[typei]:
-                r[element] = self.typeList[typei](r[element])
-            #print "type of %s is %s" % (r[element], type(r[element]))           
-        return r
+    def transFormType(self, rows):
+        for r in rows:   
+            for i, element in enumerate(r):
+                typei = self.titleList.index(element)
+                #print "type of %s is %s" % (r[element], type(r[element]))
+                if r[element] == "":
+                    pass
+                elif type(r[element]) != self.typeList[typei]:
+                    r[element] = self.typeList[typei](r[element])
+                #print "type of %s is %s" % (r[element], type(r[element]))            
                         
     def SaveSheetinJSON(self, sheetIndex): # Transform CSV to json
         self.LoadWorkSheet(sheetIndex)
@@ -112,7 +113,7 @@ class QuestionDownloader:
         f = codecs.open("Questions.csv", 'r', encoding='utf-8')
         csv_reader = csv.DictReader(f,self.titleList)
         jsonf = codecs.open(self.workSheetName[sheetIndex] + ".json",'w', encoding='utf-8')
-        data = json.dumps([self.transFormType(r) for r in csv_reader], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
+        data = json.dumps([self.transFormType(csv_reader)], indent=4, separators=(',', ': '), ensure_ascii=False, encoding='utf-8')
         jsonf.write(data)
         f.close()
         jsonf.close()
@@ -138,7 +139,61 @@ class QuestionDownloader:
 
         self.typeList = self.LoadType(strtypeList)
         self.valueList = [row for row in totalList if self.checkTypeError(row)]
+ 
+        # reconstruct typelist and titlelist
+        self.colnum = len(self.typeList)
+        typeStack = []
+        titleStack = []
+        valueStacks = [[] for i in range(self.colnum)]
+        for i, t in enumerate(reversed(self.typeList)):
+            if t == ListType: # append later type
+                # add upper level list
+                typeStack = [typeStack[:]]
+                titleStack = [titleStack[:]]
+                valueStacks = [[valuestack[:]] for valuestack in valueStacks]
+            else:
+                typeStack.insert(0, t) # push
+                titleStack.insert(0, self.titleList[self.colnum-1-i])                
+                for j, valueStack in enumerate(valueStacks):
+                    valueStack.insert(0, self.valueList[j][self.colnum-1-i])
+        print "typestack = ", typeStack
+        print "titleStack = ", titleStack
+        print "valueStack = ", valueStacks 
 
+        for row in valueStacks:
+            #tmprow = dict(zip(titleStack, row))
+            print "tmprow", tmprow
+                
+        
+        # should add original value into array before this            
+        newValueList = []
+        for i in range(len(self.valueList)):
+            nowRow = self.valueList[i]
+            for j in range(self.colnum):
+                if nowRow[j] != "": # part of array
+                    if j == 0:
+                        newValueList.append(nowRow)
+                        self.updateArray(nowRow)
+                        #print nowRow
+                        break
+                    else:
+                        print "original list\n", newValueList[-1]
+                        originalValue = newValueList[-1][j-2] 
+                        print "original value\n", originalValue                        
+                        newList = [originalValue, nowRow[j:]]
+                        print "updated value\n", newList
+                        newValueList[-1][j-2] = newList
+                        print "updated list\n", newValueList[-1]
+                        break
+
+        print newValueList
+                    
+                    
+    def updateArray(self, row):
+        for i in range(len(row), 0, -1):
+            pass
+        
+                    
     def LoadType(self, strtypeList):
         typeList = []
         for elementType in strtypeList:
