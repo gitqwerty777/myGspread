@@ -94,8 +94,9 @@ class QuestionDownloader:
         filenamelist = []
         for i in range(len(self.workSheets)):
             filenamelist.append(self.linkPrefix + self.workSheetName[i] + ".json")
-        print filenamelist # DON'T DELETE, will be used in php
+            #print filenamelist # DON'T DELETE, will be used in php
         data = json.dumps(filenamelist, separators=(',',':'))
+        print data
         jsonlinkf.write(data)
         jsonlinkf.close()
                     
@@ -103,10 +104,10 @@ class QuestionDownloader:
         for i in range(len(self.workSheets)):
             self.SaveSheetinJSON(i)
        
-    def transFormType(self, rows):
+    def transFormType(self, rows): #not used , insteaded by translist
         for r in rows:   
             for i, element in enumerate(r):
-                typei = self.titleList.index(element)
+                typei = self.titleList.index(element)               
                 #print "type of %s is %s" % (r[element], type(r[element]))
                 if r[element] == "":
                     pass
@@ -134,6 +135,8 @@ class QuestionDownloader:
         for i, element in enumerate(row):            
             if element == "":
                 pass
+            elif self.typeList[i] == BooleanType:
+                row[i] = (element == "true");
             elif type(element) != self.typeList[i]:
                 row[i] = self.typeList[i](element)
         return row        
@@ -173,6 +176,7 @@ class QuestionDownloader:
                     valueStack[self.titleList[self.colnum-1-i]] = self.valueList[j][self.colnum-1-i]
 
         valueStacks = [reverseOrder(row) for row in valueStacks]
+        #valueStacks = [self.putDictInList(row) for row in valueStacks]
         
         self.valueStacks = valueStacks
         self.titleStack = titleStack
@@ -188,6 +192,7 @@ class QuestionDownloader:
         prerow = []
         mergeStack = []
         for i, row in enumerate(self.valueStacks):
+            
             FirstValuePosition, isFirstElement = self.checkRowType(row)
             if not isFirstElement: # not row, merge it to previous one                
                 #print "prerow"; prettyPrint(prerow)
@@ -198,6 +203,7 @@ class QuestionDownloader:
                     prerowPart = prerowPart[k]
                     mergedrow = mergedrow[k]
                 #print "%s append %s" % (str(prerowPart), str(mergedrow))                
+                mergedrow = self.putDictInList(mergedrow)
                 
                 mergeRow = []
                 if isinstance(prerowPart, list):
@@ -211,14 +217,29 @@ class QuestionDownloader:
                     mergepos = mergepos[k]        
                 mergepos[FirstValuePosition[-2]] = mergeRow # update the value at where upper level of first value is
             else:
+                #self.putDictInList(row)
                 if prerow != []:
-                    mergeStack.append(prerow)
-                prerow = row
-        if prerow != mergeStack[-1]: # the last row(doesn't append yet)
-            mergeStack.append(prerow)
+                    mergeStack.append(self.putDictInList(prerow))
+                prerow = row                                    
+
+        if prerow != mergeStack[-1]: # the last row(doesn't append yet)                        
+            mergeStack.append(self.putDictInList(prerow))
         #print "mergeStack", mergeStack
         self.valueStacks = mergeStack
-        
+
+    def putDictInList(self, row, isfirst = True):# if find dict as value, change it to [dict]
+        #if not isfirst:
+         #   print "transform %s to list" % str(row)
+        for key in row:
+            if isinstance(row[key], OrderedDict):
+                #print row[key], "islist"
+                row[key] = self.putDictInList(row[key], False)             
+        if not isfirst:
+            row = [row]
+            #print "newrow", row
+        return row
+               
+                
     def checkRowType(self, row):       
         isFirstElement = True
         FirstValuePosition = []
@@ -249,7 +270,7 @@ class QuestionDownloader:
             elif elementType == "string":
                 typeList.append(UnicodeType)
             elif elementType == "bool":
-                typeList.append(BooleanType)
+               typeList.append(BooleanType) 
             elif elementType == "float":
                 typeList.append(FloatType)
             elif elementType == "array":
